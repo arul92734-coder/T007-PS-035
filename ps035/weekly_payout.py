@@ -22,17 +22,29 @@ existing daily API is called once per day to produce them (routes derived from
 events, like the Daily Payout default). Pass PLAN-based results yourself when
 you want planned routes from PLAN.
 
-Formula
+Formula (TDS-base correction: PROJECT WORKING DECISION, not mentor-confirmed)
 -------
-    daily_net_total  = sum(net_payout of the Mon..Sat daily results)       # penalties + COD already inside
-    attendance_bonus = 500 if working_days == 6 else 0
-    ev_allowance     = 30 * working_days if rider is EV_BIKE else 0
-    weekly_gross     = daily_net_total + attendance_bonus + ev_allowance     # == tds_base
-    tds              = round_half_up_to_paise(1% of weekly_gross) if weekly_gross > 5000 else 0
-    net_before_round = weekly_gross - tds
-    net_rounded      = round_half_up_to_rupee(net_before_round)
-    frozen           = any daily result has weekly_freeze_flag (daily COD shortfall > 2000)
+    daily_gross_total   = sum(gross_earnings of the Mon..Sat daily results)  # BEFORE penalties / COD
+    penalties_total     = sum(penalties_deducted of the daily results)        # capped, as applied daily
+    cod_shortfall_total = sum(cod_shortfall of the daily results)
+    daily_net_total     = sum(net_payout of the daily results)
+                        = daily_gross_total - penalties_total - cod_shortfall_total
+    attendance_bonus    = 500 if working_days == 6 else 0
+    ev_allowance        = 30 * working_days if rider is EV_BIKE else 0
+    weekly_gross        = daily_gross_total + attendance_bonus + ev_allowance  # == tds_base
+    tds                 = round_half_up_to_paise(1% of weekly_gross) if weekly_gross > 5000 else 0
+    net_before_round    = weekly_gross - tds - penalties_total - cod_shortfall_total
+                        = daily_net_total + attendance_bonus + ev_allowance - tds
+    net_rounded         = round_half_up_to_rupee(net_before_round)             # LAST step
+    frozen              = any daily result has weekly_freeze_flag (daily COD shortfall > 2000)
     amount_held / amount_payable = see FREEZE policy below
+
+    ``weekly_gross`` therefore means "gross earnings + weekly bonuses BEFORE any deduction". Daily
+    penalties and COD shortfalls do NOT reduce the TDS base; they reduce only the final net, and
+    each is deducted exactly once (the code adds the daily NET, which already holds them, to the
+    weekly items - it never subtracts them a second time). Because ``weekly_gross`` is no longer
+    ``daily_net_total + bonuses``, the weekly_payouts.csv columns keep their README names and order
+    but ``weekly_gross`` now carries this meaning.
 
 Weekly period (rule A)
     Monday..Saturday, inclusive: ``week_start`` MUST be a Monday (ValueError
@@ -68,15 +80,17 @@ Qualifying working day (rules B and C, ONE definition for both bonuses)
 EV allowance (rule C): Rs 30 x qualifying working days, EV_BIKE riders only.
 
 TDS (rule D)
-    BASE = ``weekly_gross`` (daily net total + attendance bonus + EV allowance,
-    i.e. after daily penalties/COD, before TDS; the README column order
-    daily_net_total, attendance_bonus, ev_allowance, weekly_gross, tds).
+    BASE = ``weekly_gross`` = daily GROSS earnings total + attendance bonus + EV
+    allowance, i.e. BEFORE daily penalties and COD shortfalls (and before TDS).
     Applied only when base is STRICTLY greater than Rs 5,000 (exactly 5,000.00
     -> none). Amount = 1% of the base, rounded HALF_UP to paise. ASSUMPTION: the
-    docs only say "1% if weekly gross exceeds 5,000" and list the TDS base and
-    rounding as open questions. The final net is rounded HALF_UP to the nearest
-    rupee ("Net rounded to nearest rupee", BR-10); the rounding difference is shown
-    as its own line item.
+    design document only says "1% if weekly gross exceeds 5,000" and lists the TDS
+    base and the deduction order as OPEN QUESTIONS ("Is TDS calculated before or
+    after incentives and other deductions?"). This base is a PROJECT WORKING
+    DECISION taken for this project, NOT a mentor-confirmed rule. (Earlier versions
+    used daily NET + bonuses as the base.) Rounding stages: TDS is rounded to paise
+    first; the final net is then rounded HALF_UP to the nearest rupee ("Net rounded
+    to nearest rupee", BR-10); the rounding difference is shown as its own line item.
 
 COD freeze (rule E)
     Reused from Daily Payout: the week is frozen when ANY included daily result
@@ -138,6 +152,7 @@ CODE_DAILY_NET_TOTAL = "DAILY_NET_TOTAL"
 CODE_ATTENDANCE_BONUS = "ATTENDANCE_BONUS"
 CODE_EV_ALLOWANCE = "EV_ALLOWANCE"
 CODE_TDS = "TDS"
+CODE_TDS_BASE = "TDS_BASE"
 CODE_ROUNDING = "NET_ROUNDING"
 CODE_WORKING_DATES = "WORKING_DATES"
 CODE_DAILY_REVIEW = "DAILY_RESULT_REVIEW"
@@ -213,18 +228,19 @@ class WeeklyPayoutResult:
     daily_lines: tuple[WeeklyDayLine, ...]   # always the six Mon..Sat dates, in order
 
     # daily totals (copied/summed from the daily results, never recalculated)
-    daily_gross_total: Decimal
-    daily_net_total: Decimal
+    daily_gross_total: Decimal            # earnings before penalties / COD (the TDS base starts here)
+    penalties_total: Decimal              # sum of the daily penalties actually deducted (after the 25% cap)
+    daily_net_total: Decimal              # gross - penalties - COD shortfall, as the daily results state it
 
     # weekly-level items
     attendance_bonus: Decimal
     ev_allowance: Decimal
-    weekly_gross: Decimal
-    tds_base: Decimal
+    weekly_gross: Decimal                 # daily_gross_total + bonuses, BEFORE any deduction
+    tds_base: Decimal                     # == weekly_gross
     tds_amount: Decimal
     tds_status: str                       # APPLIED / NOT_APPLICABLE
-    net_before_rounding: Decimal
-    net_rounded: Decimal                  # whole rupees
+    net_before_rounding: Decimal          # weekly_gross - tds - penalties_total - cod_shortfall_total
+    net_rounded: Decimal                  # whole rupees (final rounding)
 
     # COD / freeze (reported from the daily results; NOT deducted again)
     cod_shortfall_total: Decimal
@@ -247,7 +263,10 @@ class WeeklyPayoutResult:
         return self.freeze_flag
 
     def to_csv_row(self) -> dict[str, str]:
-        """Fields of the README ``weekly_payouts.csv`` (text, 2-dp money, true/false)."""
+        """Fields of the README ``weekly_payouts.csv`` (text, 2-dp money, true/false).
+
+        ``weekly_gross`` is the gross BEFORE deductions (daily gross + bonuses = TDS base);
+        ``daily_net_total`` is the sum of the daily nets (penalties and COD already deducted)."""
         def money(x: Decimal) -> str:
             return f"{x.quantize(PAISE, rounding=ROUND_HALF_UP):.2f}"
 
@@ -270,14 +289,16 @@ class WeeklyPayoutResult:
             f"WEEKLY STATEMENT  rider {self.rider_id} ({self.vehicle_type})",
             f"Week: {self.week_start.isoformat()} (Mon) to {self.week_end.isoformat()} (Sat)",
             f"Working days: {self.working_days} - " + (", ".join(d.isoformat() for d in self.working_dates) or "none"),
-            f"Daily gross total:   {self.daily_gross_total:.2f}",
-            f"Daily net total:     {self.daily_net_total:.2f}   (penalties and COD shortfall already deducted)",
+            f"Daily gross total:   {self.daily_gross_total:.2f}   (before penalties and COD shortfall)",
+            f"Daily penalties:     {self.penalties_total:.2f}   (deducted once, in the daily net)",
+            f"COD shortfall total: {self.cod_shortfall_total:.2f}   (deducted once, in the daily net; max single day {self.max_daily_cod_shortfall:.2f})",
+            f"Daily net total:     {self.daily_net_total:.2f}   (= gross - penalties - COD shortfall)",
             f"Attendance bonus:    {self.attendance_bonus:.2f}",
             f"EV allowance:        {self.ev_allowance:.2f}",
-            f"Weekly gross (TDS base): {self.weekly_gross:.2f}",
+            f"Weekly gross before deductions (TDS base): {self.weekly_gross:.2f}",
             f"TDS ({self.tds_status}): {self.tds_amount:.2f}",
+            f"Net before rounding: {self.net_before_rounding:.2f}   (= weekly gross - TDS - penalties - COD shortfall)",
             f"Net rounded:         {self.net_rounded:.2f}",
-            f"COD shortfall total: {self.cod_shortfall_total:.2f}   (max single day {self.max_daily_cod_shortfall:.2f})",
             f"Freeze: {'FROZEN' if self.freeze_flag else 'not frozen'}"
             + (f" (days: {', '.join(d.isoformat() for d in self.freeze_dates)})" if self.freeze_dates else ""),
             f"Amount held:         {self.amount_held:.2f}",
@@ -351,13 +372,15 @@ def _assumption_lines(policy: WeeklyPolicy) -> tuple[str, ...]:
                  else "a frozen week holds only an amount equal to the weekly COD shortfall (capped at the net)")
     return (
         rule_text,
-        "TDS base = weekly gross (daily net total + attendance bonus + EV allowance); 1% rounded half-up to paise; "
-        "applied only when strictly above 5000.00",
-        "final net rounded half-up to the nearest rupee",
+        "TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily "
+        "penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly "
+        "above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)",
+        "final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; "
+        "rounded half-up to the nearest rupee as the last step",
         "freeze = any daily result with weekly_freeze_flag" + ("; or weekly shortfall total > 2000"
                                                               if policy.freeze_on_weekly_total else ""),
         hold_text,
-        "COD shortfall and penalties are not deducted again (already inside the daily net)",
+        "COD shortfall and penalties are not deducted again (they are already inside the daily net)",
     )
 
 
@@ -483,6 +506,7 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
     # ---- totals (summed from the daily results; nothing is recalculated) ----
     daily_gross = sum((x.gross_earnings for x in by_date.values()), Decimal(0))
     daily_net = sum((x.net_payout for x in by_date.values()), Decimal(0))
+    penalties_total = sum((x.penalties_deducted for x in by_date.values()), Decimal(0))
     shortfall_total = sum((x.cod_shortfall for x in by_date.values()), Decimal(0))
     max_shortfall = max((x.cod_shortfall for x in by_date.values()), default=Decimal(0))
     freeze_dates = tuple(d for d in dates if d in by_date and by_date[d].weekly_freeze_flag)
@@ -491,10 +515,13 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
     n_work = len(working)
     attendance = ATTENDANCE_BONUS if n_work == ATTENDANCE_REQUIRED_DAYS else Decimal(0)
     ev = EV_ALLOWANCE_PER_DAY * n_work if rider.vehicle_type == EV_BIKE_VEHICLE_TYPE else Decimal(0)
-    weekly_gross = daily_net + attendance + ev
+    # TDS base: gross earnings + weekly bonuses, BEFORE daily penalties / COD shortfall.
+    weekly_gross = daily_gross + attendance + ev
     tds = compute_tds(weekly_gross)
     tds_status = TDS_APPLIED if tds > 0 else TDS_NOT_APPLICABLE
-    net_before = weekly_gross - tds
+    # Final net: the daily NET already holds penalties and COD shortfall (deducted once there), so we add
+    # the weekly items to it and take TDS off. This equals weekly_gross - tds - penalties - COD shortfall.
+    net_before = daily_net + attendance + ev - tds
     net_rounded = _round_rupee(net_before)
     if net_rounded < 0:
         warn(WARNING_NEGATIVE_NET, f"weekly net payout is negative ({net_rounded}); it is reported as is")
@@ -532,9 +559,13 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
         items.append(LineItem(CODE_EV_ALLOWANCE, EARNING, f"EV_BIKE allowance for {n_work} working days at {EV_ALLOWANCE_PER_DAY}/day",
                               ev, Decimal(n_work), EV_ALLOWANCE_PER_DAY))
     if tds:
-        items.append(LineItem(CODE_TDS, DEDUCTION, f"TDS 1% of weekly gross {weekly_gross}", -tds))
+        items.append(LineItem(CODE_TDS, DEDUCTION,
+                              f"TDS 1% of the TDS base {weekly_gross} (daily gross + weekly bonuses, before penalties/COD)", -tds))
     if net_rounded != net_before:
         items.append(LineItem(CODE_ROUNDING, ADJUSTMENT, "rounding to the nearest rupee", net_rounded - net_before))
+    items.append(LineItem(CODE_TDS_BASE, INFO,
+                          f"TDS base {weekly_gross} = daily gross {daily_gross} + attendance {attendance} + EV {ev}; "
+                          f"not reduced by penalties {penalties_total} or COD shortfall {shortfall_total}", Decimal(0)))
     items.append(LineItem(CODE_WORKING_DATES, INFO, ", ".join(d.isoformat() for d in working) or "none", Decimal(0)))
     if review_days:   # information only: the daily results keep their own warnings; they are not repeated here
         items.append(LineItem(CODE_DAILY_REVIEW, INFO,
@@ -545,7 +576,7 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
         rider_id=rider_id, vehicle_type=rider.vehicle_type, week_start=dates[0], week_end=dates[-1],
         status=STATUS_REVIEW if warns else STATUS_OK,
         working_days=n_work, working_dates=tuple(working), daily_lines=tuple(lines),
-        daily_gross_total=daily_gross, daily_net_total=daily_net,
+        daily_gross_total=daily_gross, penalties_total=penalties_total, daily_net_total=daily_net,
         attendance_bonus=attendance, ev_allowance=ev, weekly_gross=weekly_gross, tds_base=weekly_gross,
         tds_amount=tds, tds_status=tds_status, net_before_rounding=net_before, net_rounded=net_rounded,
         cod_shortfall_total=shortfall_total, max_daily_cod_shortfall=max_shortfall, freeze_flag=freeze,

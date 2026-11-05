@@ -32,10 +32,13 @@ SUN = MON + timedelta(days=6)
 
 
 def daily(rider="R1", day=MON, *, net="100", gross=None, delivered=1, failed_paid=0, failed_unpaid=0,
-          rescheduled=0, shortfall="0", freeze=None, status=None) -> DailyPayoutResult:
-    """A real DailyPayoutResult with every field filled; only the weekly-relevant ones matter."""
-    net_d, short = D(net), D(shortfall)
-    gross_d = D(gross) if gross is not None else net_d + short
+          rescheduled=0, shortfall="0", freeze=None, status=None, penalties="0") -> DailyPayoutResult:
+    """A real DailyPayoutResult with every field filled; only the weekly-relevant ones matter.
+
+    Default gross = net + shortfall + penalties, i.e. gross - penalties - shortfall == net exactly
+    like a real daily result. ``penalties`` fills penalties_deducted (and the uncapped value)."""
+    net_d, short, pen = D(net), D(shortfall), D(penalties)
+    gross_d = D(gross) if gross is not None else net_d + short + pen
     values = {f.name: None for f in fields(DailyPayoutResult)}
     zero_ints = ("delivered_count", "standard_delivered_count", "express_delivered_count", "failed_paid_count",
                  "failed_unpaid_count", "rescheduled_count", "first_attempt_successes", "eligible_attempt_count",
@@ -50,6 +53,7 @@ def daily(rider="R1", day=MON, *, net="100", gross=None, delivered=1, failed_pai
         failed_unpaid_count=failed_unpaid, rescheduled_count=rescheduled, distance_source="NONE",
         odometer_discrepancy_flag=False, gross_earnings=gross_d, net_payout=net_d, cod_shortfall=short,
         weekly_freeze_flag=(short > 2000) if freeze is None else freeze,
+        penalties_deducted=pen, penalties_uncapped=pen,
         status=status or "OK", line_items=(), warnings=(), cod_collected=short, cod_credited=D(0),
     )
     return DailyPayoutResult(**values)
@@ -290,11 +294,17 @@ def test_tds_base_is_weekly_gross_including_bonuses(ctx):
     assert r.tds_amount == D("51.80") and r.net_before_rounding == D("5128.20") and r.net_rounded == D("5128")
 
 
-def test_tds_base_is_not_the_daily_gross(ctx):
-    """Daily gross is above 5,000 but the (post-penalty/COD) weekly gross is not: no TDS."""
-    results = [daily("R1", MON, net="4000", gross="6000")]
+def test_tds_base_is_the_daily_gross_not_the_daily_net(ctx):
+    """CHANGED with the approved TDS-base decision (it used to assert the opposite).
+
+    Daily gross 6,000 (penalties 400, COD shortfall 1,600 -> daily net 4,000): the base is the GROSS,
+    so TDS applies even though the net is below 5,000."""
+    results = [daily("R1", MON, net="4000", gross="6000", penalties="400", shortfall="1600")]
     r = calculate_weekly_payout(ctx, "R1", MON, daily_results=results)
-    assert r.daily_gross_total == D("6000") and r.weekly_gross == D("4000") and r.tds_amount == D("0.00")
+    assert r.daily_gross_total == D("6000") and r.daily_net_total == D("4000")
+    assert r.weekly_gross == r.tds_base == D("6000")
+    assert r.tds_amount == D("60.00") and r.tds_status == wp.TDS_APPLIED
+    assert r.net_before_rounding == D("3940.00") and r.net_rounded == D("3940")
 
 
 @pytest.mark.parametrize("gross, tds", [
@@ -344,14 +354,18 @@ def test_cod_exactly_2000_does_not_freeze(ctx):
 def test_cod_above_2000_freezes_and_holds_everything_by_default(ctx):
     r = calculate_weekly_payout(ctx, "R1", MON, daily_results=[daily("R1", MON, net="3000", shortfall="2000.01")])
     assert r.freeze_flag and r.freeze_dates == (MON,) and wp.WARNING_WEEKLY_FREEZE in r.warning_codes
-    assert r.net_rounded == D("3000") and r.amount_held == D("3000") and r.amount_payable == D("0")
+    # gross = 3000 + 2000.01 = 5000.01 > 5000 -> TDS 50.00 on the GROSS base -> net 2950 (was 3000 before the TDS-base decision)
+    assert r.tds_amount == D("50.00") and r.net_rounded == D("2950")
+    assert r.amount_held == D("2950") and r.amount_payable == D("0")
     assert r.to_csv_row()["frozen"] == "true"
 
 
 def test_freeze_hold_shortfall_mode_holds_only_the_shortfall(ctx):
     r = calculate_weekly_payout(ctx, "R1", MON, daily_results=[daily("R1", MON, net="3000", shortfall="2600")],
                                 policy=WeeklyPolicy(freeze_hold_mode=HOLD_SHORTFALL))
-    assert r.freeze_flag and r.amount_held == D("2600") and r.amount_payable == D("400")
+    # gross = 3000 + 2600 = 5600 -> TDS 56.00 -> net 2944 (was 3000 before the TDS-base decision); the hold is still 2600
+    assert r.tds_amount == D("56.00") and r.net_rounded == D("2944")
+    assert r.freeze_flag and r.amount_held == D("2600") and r.amount_payable == D("344")
     assert r.amount_held + r.amount_payable == r.net_rounded
 
 
@@ -388,15 +402,19 @@ def test_weekly_total_of_exactly_2000_never_freezes(ctx):
 
 
 def test_cod_shortfall_and_penalties_are_not_deducted_again(ctx):
-    """daily net already contains them: weekly gross is exactly net total + bonuses, and no COD/penalty line exists."""
-    results = [daily("EV1", d, net="400", gross="700", shortfall="150") for d in WEEK]
+    """Each day: gross 900, penalties 100, COD shortfall 150 -> daily net 650. They are deducted ONCE (in the daily net)."""
+    results = [daily("EV1", d, gross="900", penalties="100", shortfall="150", net="650") for d in WEEK]
     r = calculate_weekly_payout(ctx, "EV1", MON, daily_results=results)
-    assert r.daily_net_total == D("2400")
-    assert r.weekly_gross == D("2400") + D("500") + D("180")
-    assert r.cod_shortfall_total == D("900")                    # reported only
+    assert (r.daily_gross_total, r.penalties_total, r.cod_shortfall_total, r.daily_net_total) == (
+        D("5400"), D("600"), D("900"), D("3900"))
+    assert r.weekly_gross == D("5400") + D("500") + D("180") == D("6080")           # gross + bonuses, before deductions
+    assert r.tds_amount == D("60.80")
+    # final net = weekly gross - TDS - penalties - COD shortfall, each ONCE
+    assert r.net_before_rounding == D("6080") - D("60.80") - D("600") - D("900") == D("4519.20")
+    assert r.net_before_rounding == r.daily_net_total + r.attendance_bonus + r.ev_allowance - r.tds_amount
+    assert r.net_rounded == D("4519")
     codes = {i.code for i in r.line_items}
-    assert not any("COD" in c or "PENALTY" in c for c in codes)
-    assert r.net_before_rounding == r.weekly_gross - r.tds_amount
+    assert not any("COD" in c or "PENALTY" in c for c in codes)            # no second deduction line
 
 
 def test_no_weekly_penalty_cap_is_applied(ctx):
@@ -419,6 +437,121 @@ def test_daily_results_are_not_mutated_and_not_recalculated(ctx, monkeypatch):
     assert r.daily_net_total == D("123.45") * 6
     with pytest.raises(Exception):
         r.net_rounded = D(0)                                    # the weekly result is frozen too
+
+
+# --------------------------------------------------------------------------
+# TDS base = daily GROSS + weekly bonuses (project working decision, not mentor-confirmed)
+# --------------------------------------------------------------------------
+
+
+def _week_with(ctx, *, gross, penalties="0", shortfall="0", rider="R1"):
+    """One day, one non-EV rider: no bonuses, so the weekly gross == the daily gross."""
+    net = D(gross) - D(penalties) - D(shortfall)
+    return calculate_weekly_payout(ctx, rider, MON, daily_results=[
+        daily(rider, MON, gross=gross, penalties=penalties, shortfall=shortfall, net=str(net))])
+
+
+def test_tds_base_uses_daily_gross_plus_bonuses_not_daily_net_plus_bonuses(ctx):
+    """EV rider, 6 days x gross 1,000 (penalty 100, COD shortfall 100 -> net 800).
+    New base 6,000 + 500 + 180 = 6,680 (TDS applies). The old base 4,800 + 680 = 5,480 would also apply,
+    so the amounts below are what separates the two decisions: 66.80 (new) vs 54.80 (old)."""
+    results = [daily("EV1", d, gross="1000", penalties="100", shortfall="100", net="800") for d in WEEK]
+    r = calculate_weekly_payout(ctx, "EV1", MON, daily_results=results)
+    assert r.daily_net_total == D("4800") and r.daily_gross_total == D("6000")
+    assert r.tds_base == r.weekly_gross == D("6680") != r.daily_net_total + r.attendance_bonus + r.ev_allowance
+    assert r.tds_amount == D("66.80")
+    assert r.net_before_rounding == D("4800") + D("680") - D("66.80") == D("5413.20")
+
+
+def test_a_daily_penalty_reduces_the_final_net_but_not_the_tds_base(ctx):
+    clean = _week_with(ctx, gross="6000")
+    penalised = _week_with(ctx, gross="6000", penalties="1500")
+    assert penalised.tds_base == clean.tds_base == D("6000")
+    assert penalised.tds_amount == clean.tds_amount == D("60.00")
+    assert clean.net_rounded - penalised.net_rounded == D("1500")          # reduced by exactly the penalty, once
+
+
+def test_a_cod_shortfall_reduces_the_final_net_but_not_the_tds_base(ctx):
+    clean = _week_with(ctx, gross="6000")
+    short = _week_with(ctx, gross="6000", shortfall="1000")
+    assert short.tds_base == clean.tds_base == D("6000")
+    assert short.tds_amount == clean.tds_amount == D("60.00")
+    assert clean.net_rounded - short.net_rounded == D("1000")
+    assert short.cod_shortfall_total == D("1000") and not short.freeze_flag
+
+
+def test_penalty_and_shortfall_together_are_deducted_exactly_once(ctx):
+    r = _week_with(ctx, gross="6000", penalties="1500", shortfall="1000")
+    assert r.daily_net_total == D("3500")
+    assert r.net_before_rounding == r.weekly_gross - r.tds_amount - r.penalties_total - r.cod_shortfall_total == D("3440.00")
+    assert r.net_rounded == D("3440")          # NOT 3440 - 1500 - 1000 (that would be a double deduction)
+
+
+def test_tds_base_exactly_5000_even_with_big_deductions_has_no_tds(ctx):
+    r = _week_with(ctx, gross="5000.00", penalties="1250", shortfall="500")
+    assert r.tds_base == D("5000.00") and r.tds_amount == D("0.00") and r.tds_status == wp.TDS_NOT_APPLICABLE
+    assert r.net_rounded == D("3250")
+
+
+def test_tds_base_just_above_5000_applies_even_when_the_net_is_far_below(ctx):
+    r = _week_with(ctx, gross="5000.01", penalties="1250", shortfall="500")
+    assert r.tds_status == wp.TDS_APPLIED and r.tds_amount == D("50.00")      # 50.0001 -> 50.00
+    assert r.net_before_rounding == D("3250.01") - D("50.00") == D("3200.01") and r.net_rounded == D("3200")
+
+
+def test_tds_is_just_below_5000_when_the_gross_is_just_below(ctx):
+    r = _week_with(ctx, gross="4999.99")
+    assert r.tds_amount == D("0.00")
+
+
+def test_tds_rounds_half_up_to_paise_on_the_gross_base(ctx):
+    r = _week_with(ctx, gross="5000.50", penalties="1000")                    # 1% = 50.005 -> 50.01
+    assert r.tds_amount == D("50.01")
+    r = _week_with(ctx, gross="5000.49", penalties="1000")                    # 1% = 50.0049 -> 50.00
+    assert r.tds_amount == D("50.00")
+
+
+@pytest.mark.parametrize("penalty, expected_before, expected_rounded", [
+    ("0.50", "5048.50", "5049"),       # exactly .50 -> half-up
+    ("0.51", "5048.49", "5048"),
+    ("0.49", "5048.51", "5049"),
+])
+def test_final_net_is_rounded_half_up_to_the_rupee_as_the_last_step(ctx, penalty, expected_before, expected_rounded):
+    r = _week_with(ctx, gross="5100.00", penalties=penalty)                  # TDS 51.00 on the gross base
+    assert r.tds_amount == D("51.00")
+    assert r.net_before_rounding == D(expected_before) and r.net_rounded == D(expected_rounded)
+
+
+def test_weekly_identity_holds_for_consistent_daily_results(ctx):
+    """gross - TDS - penalties - COD shortfall == daily net + bonuses - TDS, for real-style daily results."""
+    results = [daily("EV1", d, gross=str(900 + i * 10), penalties=str(50 + i), shortfall=str(i * 20),
+                     net=str(900 + i * 10 - 50 - i - i * 20)) for i, d in enumerate(WEEK)]
+    r = calculate_weekly_payout(ctx, "EV1", MON, daily_results=results)
+    assert r.weekly_gross - r.tds_amount - r.penalties_total - r.cod_shortfall_total == r.net_before_rounding
+    assert r.daily_gross_total - r.penalties_total - r.cod_shortfall_total == r.daily_net_total
+
+
+def test_line_items_still_add_up_when_penalties_and_shortfall_exist(ctx):
+    for gross, pen, short in (("6000", "700", "300"), ("5100.00", "0.50", "0"), ("2000", "100", "50")):
+        r = _week_with(ctx, gross=gross, penalties=pen, shortfall=short)
+        signed = sum((i.amount for i in r.line_items if i.kind in ("EARNING", "DEDUCTION", "ADJUSTMENT")), D(0))
+        assert signed == r.net_rounded
+        assert any(i.code == wp.CODE_TDS_BASE for i in r.line_items)
+
+
+def test_csv_weekly_gross_is_the_gross_before_deductions_and_daily_net_total_is_the_net(ctx):
+    results = [daily("EV1", d, gross="1000", penalties="100", shortfall="100", net="800") for d in WEEK]
+    row = calculate_weekly_payout(ctx, "EV1", MON, daily_results=results).to_csv_row()
+    assert row["daily_net_total"] == "4800.00" and row["weekly_gross"] == "6680.00"
+    assert row["tds"] == "66.80" and row["net_rounded"] == "5413.00"
+    assert list(row) == ["week_start", "rider_id", "working_days", "daily_net_total", "attendance_bonus",
+                         "ev_allowance", "weekly_gross", "tds", "net_rounded", "frozen"]
+
+
+def test_new_money_fields_are_decimal(ctx):
+    r = _week_with(ctx, gross="5000.01", penalties="10")
+    for name in ("daily_gross_total", "penalties_total", "tds_base", "net_before_rounding"):
+        assert isinstance(getattr(r, name), Decimal)
 
 
 # --------------------------------------------------------------------------
@@ -478,19 +611,23 @@ def test_batch_returns_sorted_riders_with_rostered_or_resulting_days(ctx):
 
 
 def test_statement_contains_every_required_field(ctx):
-    results = [daily("EV1", d, net="1000", gross="1100", shortfall="0") for d in WEEK]
-    results[1] = daily("EV1", WEEK[1], net="400", gross="1100", shortfall="2600")
+    # five normal days: gross 1,100, penalties 100 -> net 1,000; Tuesday: gross 3,000, COD shortfall 2,600 -> net 400
+    results = [daily("EV1", d, gross="1100", penalties="100", net="1000") for d in WEEK]
+    results[1] = daily("EV1", WEEK[1], gross="3000", shortfall="2600", net="400")
     r = calculate_weekly_payout(ctx, "EV1", MON, daily_results=results)
     assert r.rider_id == "EV1" and (r.week_start, r.week_end) == (MON, WEEK[-1])
     assert r.working_days == 6 and r.working_dates == tuple(WEEK)
-    assert (r.daily_gross_total, r.daily_net_total) == (D("6600"), D("5400"))
+    assert (r.daily_gross_total, r.penalties_total, r.daily_net_total) == (D("8500"), D("500"), D("5400"))
     assert (r.attendance_bonus, r.ev_allowance) == (D("500"), D("180"))
-    assert (r.weekly_gross, r.tds_base, r.tds_amount, r.tds_status) == (D("6080"), D("6080"), D("60.80"), wp.TDS_APPLIED)
-    assert r.net_rounded == D("6019") and r.freeze_flag and r.amount_held == D("6019") and r.amount_payable == D("0")
+    assert (r.weekly_gross, r.tds_base, r.tds_amount, r.tds_status) == (D("9180"), D("9180"), D("91.80"), wp.TDS_APPLIED)
+    assert r.net_before_rounding == D("9180") - D("91.80") - D("500") - D("2600") == D("5988.20")
+    assert r.net_rounded == D("5988") and r.freeze_flag and r.amount_held == D("5988") and r.amount_payable == D("0")
     assert r.cod_shortfall_total == D("2600") and r.assumptions
     text = "\n".join(r.statement_lines())
-    for needle in ("EV1", "2026-10-12", "2026-10-17", "Working days: 6", "Attendance bonus", "EV allowance",
-                   "TDS", "FROZEN", "Amount held", "Amount payable", "ASSUMPTION"):
+    for needle in ("EV1", "2026-10-12", "2026-10-17", "Working days: 6", "Daily gross total", "Daily penalties",
+                   "COD shortfall total", "Daily net total", "Attendance bonus", "EV allowance",
+                   "Weekly gross before deductions", "TDS", "Net before rounding", "FROZEN", "Amount held",
+                   "Amount payable", "ASSUMPTION"):
         assert needle in text
 
 

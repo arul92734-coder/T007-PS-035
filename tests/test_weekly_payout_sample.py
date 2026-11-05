@@ -126,24 +126,42 @@ def test_tds_applies_only_above_5000_and_matches_one_percent(weekly):
 def test_net_rounded_is_whole_rupees_and_consistent(weekly):
     for w in weekly.values():
         assert w.net_rounded == w.net_rounded.to_integral_value()
-        assert abs(w.net_rounded - (w.weekly_gross - w.tds_amount)) <= D("0.5")
-        assert w.weekly_gross == w.daily_net_total + w.attendance_bonus + w.ev_allowance
+        # TDS base = daily GROSS + bonuses (before penalties / COD); penalties and COD shortfall are deducted once
+        assert w.weekly_gross == w.tds_base == w.daily_gross_total + w.attendance_bonus + w.ev_allowance
+        assert w.net_before_rounding == w.weekly_gross - w.tds_amount - w.penalties_total - w.cod_shortfall_total
+        assert w.net_before_rounding == w.daily_net_total + w.attendance_bonus + w.ev_allowance - w.tds_amount
+        assert abs(w.net_rounded - w.net_before_rounding) <= D("0.5")
 
 
 def test_regression_pinned_sample_values(weekly):
+    """Pinned after the TDS-base decision (gross + bonuses). Only RDR-01 and RDR-02 change in TDS/net
+    (old: 59.12 / 5853 and 76.82 / 7605); every other rider keeps its net and only the weekly_gross figure
+    (now before deductions) differs. The expected numbers were cross-checked from the daily results."""
     expect = {   # rider: (daily_net_total, weekly_gross, tds, net_rounded)
-        "RDR-01": ("5411.96", "5911.96", "59.12", "5853"),
-        "RDR-02": ("7181.54", "7681.54", "76.82", "7605"),
-        "RDR-03": ("2466.22", "3146.22", "0.00", "3146"),
-        "RDR-04": ("2388.46", "3068.46", "0.00", "3068"),
-        "RDR-05": ("2392.46", "3072.46", "0.00", "3072"),
-        "RDR-06": ("2283.09", "2783.09", "0.00", "2783"),
-        "RDR-07": ("2276.88", "2776.88", "0.00", "2777"),
-        "RDR-08": ("-116.70", "383.30", "0.00", "383"),
+        "RDR-01": ("5411.96", "10382.60", "103.83", "5808"),
+        "RDR-02": ("7181.54", "10058.92", "100.59", "7581"),
+        "RDR-03": ("2466.22", "3646.79", "0.00", "3146"),
+        "RDR-04": ("2388.46", "3575.82", "0.00", "3068"),
+        "RDR-05": ("2392.46", "3709.62", "0.00", "3072"),
+        "RDR-06": ("2283.09", "3397.30", "0.00", "2783"),
+        "RDR-07": ("2276.88", "3415.76", "0.00", "2777"),
+        "RDR-08": ("-116.70", "3684.75", "0.00", "383"),
     }
     got = {rid: (str(w.daily_net_total), str(w.weekly_gross), str(w.tds_amount), str(w.net_rounded))
            for rid, w in weekly.items()}
     assert got == expect
+
+
+def test_sample_week_tds_base_ignores_penalties_and_cod(weekly, dailies):
+    """RDR-01 (penalties 2,470.64 and COD shortfall 2,000.00 in the week): base is the GROSS, deductions apply once."""
+    w = weekly["RDR-01"]
+    mine = [d for d in dailies if d.rider_id == "RDR-01"]
+    gross = sum((d.gross_earnings for d in mine), D(0))
+    pen = sum((d.penalties_deducted for d in mine), D(0))
+    assert (gross, pen, w.cod_shortfall_total) == (D("9882.60"), D("2470.64"), D("2000.00"))
+    assert w.tds_base == gross + D("500") == D("10382.60") and w.tds_amount == D("103.83")
+    assert w.net_before_rounding == D("10382.60") - D("103.83") - D("2470.64") - D("2000.00") == D("5808.13")
+    assert w.net_rounded == D("5808") and w.penalties_total == pen
 
 
 def test_sunday_result_is_outside_the_week(ctx, dailies, weekly):
