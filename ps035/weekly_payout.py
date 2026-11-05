@@ -36,7 +36,7 @@ Formula (TDS-base correction: PROJECT WORKING DECISION, not mentor-confirmed)
     net_before_round    = weekly_gross - tds - penalties_total - cod_shortfall_total
                         = daily_net_total + attendance_bonus + ev_allowance - tds
     net_rounded         = round_half_up_to_rupee(net_before_round)             # LAST step
-    frozen              = any daily result has weekly_freeze_flag (daily COD shortfall > 2000)
+    frozen              = cod_shortfall_total > 2,000 for the whole Monday..Saturday week
     amount_held / amount_payable = see FREEZE policy below
 
     ``weekly_gross`` therefore means "gross earnings + weekly bonuses BEFORE any deduction". Daily
@@ -92,14 +92,15 @@ TDS (rule D)
     first; the final net is then rounded HALF_UP to the nearest rupee ("Net rounded
     to nearest rupee", BR-10); the rounding difference is shown as its own line item.
 
-COD freeze (rule E)
-    Reused from Daily Payout: the week is frozen when ANY included daily result
-    has ``weekly_freeze_flag`` (that day's shortfall > 2,000; exactly 2,000 does
-    not). The shortfall is ALREADY deducted in the daily net, so it is only
-    reported here, never deducted again. Optional
-    ``WeeklyPolicy.freeze_on_weekly_total`` (default False) also freezes when the
-    week's summed shortfall is > 2,000 even if no single day was; by default such
-    a week only gets a WEEKLY_COD_TOTAL_ABOVE_THRESHOLD warning.
+COD freeze (rule E; PROJECT WORKING DECISION, not mentor-confirmed)
+    The week is frozen when the SUM of included daily COD shortfalls across
+    Monday..Saturday is STRICTLY greater than 2,000. Exactly 2,000 does not
+    freeze. A single-day shortfall above 2,000 is naturally included in this
+    weekly total. Daily ``weekly_freeze_flag`` values remain visible on the
+    daily lines but do not independently decide the weekly freeze. The COD
+    shortfall is ALREADY deducted in daily net, so it is reported here and
+    never deducted again. ``freeze_dates`` lists the dates with positive COD
+    shortfall that contribute to the frozen weekly total.
     UNRESOLVED POLICY (design doc: "can undisputed earnings be paid?"):
     ``WeeklyPolicy.freeze_hold_mode``
         HOLD_ALL (default)   the whole weekly net (``net_rounded``) is held, payable now = 0
@@ -186,7 +187,6 @@ class WeeklyPolicy:
     working_day_rule: str = RULE_OUTCOME_EVENT
     require_roster_shift: bool = True
     freeze_hold_mode: str = HOLD_ALL
-    freeze_on_weekly_total: bool = False
 
     def __post_init__(self) -> None:
         if self.working_day_rule not in WORKING_DAY_RULES:
@@ -377,8 +377,8 @@ def _assumption_lines(policy: WeeklyPolicy) -> tuple[str, ...]:
         "above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)",
         "final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; "
         "rounded half-up to the nearest rupee as the last step",
-        "freeze = any daily result with weekly_freeze_flag" + ("; or weekly shortfall total > 2000"
-                                                              if policy.freeze_on_weekly_total else ""),
+        "freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; "
+        "project working decision, not mentor-confirmed)",
         hold_text,
         "COD shortfall and penalties are not deducted again (they are already inside the daily net)",
     )
@@ -509,7 +509,8 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
     penalties_total = sum((x.penalties_deducted for x in by_date.values()), Decimal(0))
     shortfall_total = sum((x.cod_shortfall for x in by_date.values()), Decimal(0))
     max_shortfall = max((x.cod_shortfall for x in by_date.values()), default=Decimal(0))
-    freeze_dates = tuple(d for d in dates if d in by_date and by_date[d].weekly_freeze_flag)
+    # Candidate dates contributing to a weekly freeze; exposed only if the threshold is crossed.
+    shortfall_dates = tuple(d for d in dates if d in by_date and by_date[d].cod_shortfall > 0)
 
     # ---- weekly-level items ----
     n_work = len(working)
@@ -527,18 +528,15 @@ def _aggregate(ctx: PayoutContext, rider_id: str, dates: tuple[date, ...],
         warn(WARNING_NEGATIVE_NET, f"weekly net payout is negative ({net_rounded}); it is reported as is")
 
     # ---- freeze ----
-    freeze = bool(freeze_dates)
-    if shortfall_total > FREEZE_SHORTFALL_THRESHOLD and not freeze:
-        if policy.freeze_on_weekly_total:
-            freeze = True
-        else:
-            warn(WARNING_WEEKLY_COD_TOTAL,
-                 f"weekly COD shortfall {shortfall_total} is above {FREEZE_SHORTFALL_THRESHOLD} but no single day was; "
-                 "not frozen under the default policy")
+    # BR-09 working decision: use the cumulative Monday-Saturday COD shortfall.
+    # A single-day shortfall > 2,000 is automatically covered by this sum.
+    freeze = shortfall_total > FREEZE_SHORTFALL_THRESHOLD
+    freeze_dates = shortfall_dates if freeze else ()
     if freeze:
         warn(WARNING_WEEKLY_FREEZE,
-             f"weekly payout frozen pending review (COD shortfall above {FREEZE_SHORTFALL_THRESHOLD} on "
-             + (", ".join(d.isoformat() for d in freeze_dates) if freeze_dates else "weekly total") + ")",
+             f"weekly payout frozen pending review (cumulative COD shortfall {shortfall_total} "
+             f"is above {FREEZE_SHORTFALL_THRESHOLD}; contributing dates: "
+             + (", ".join(d.isoformat() for d in freeze_dates) if freeze_dates else "none") + ")",
              tuple(d.isoformat() for d in freeze_dates))
     positive_net = max(net_rounded, Decimal(0))
     if not freeze:

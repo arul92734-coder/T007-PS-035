@@ -378,27 +378,28 @@ def test_hold_is_capped_at_the_net_and_never_negative(ctx):
     assert wp.WARNING_NEGATIVE_NET in neg.warning_codes
 
 
-def test_one_frozen_day_freezes_the_whole_week(ctx):
+def test_single_day_shortfall_over_2000_freezes_week_under_cumulative_rule(ctx):
     results = full_week()
     results[3] = daily("R1", WEEK[3], net="100", shortfall="2500")
     r = calculate_weekly_payout(ctx, "R1", MON, daily_results=results)
     assert r.freeze_flag and r.freeze_dates == (WEEK[3],)
+    # The daily flag remains available as daily-level information.
     assert [line.freeze_flag for line in r.daily_lines] == [False, False, False, True, False, False]
 
 
-def test_weekly_total_over_2000_without_a_frozen_day_is_only_a_warning_by_default(ctx):
+def test_weekly_total_over_2000_across_multiple_days_freezes_by_default(ctx):
     results = [daily("R1", d, net="500", shortfall="1000") for d in WEEK[:3]]      # 3 x 1000 = 3000, no day > 2000
     r = calculate_weekly_payout(ctx, "R1", MON, daily_results=results)
-    assert not r.freeze_flag and r.cod_shortfall_total == D("3000")
-    assert wp.WARNING_WEEKLY_COD_TOTAL in r.warning_codes
-    strict = calculate_weekly_payout(ctx, "R1", MON, daily_results=results, policy=WeeklyPolicy(freeze_on_weekly_total=True))
-    assert strict.freeze_flag and strict.freeze_dates == () and strict.amount_held == strict.net_rounded
+    assert r.freeze_flag and r.cod_shortfall_total == D("3000")
+    assert r.freeze_dates == tuple(WEEK[:3])
+    assert wp.WARNING_WEEKLY_FREEZE in r.warning_codes
+    assert wp.WARNING_WEEKLY_COD_TOTAL not in r.warning_codes
+    assert r.amount_held == r.net_rounded and r.amount_payable == D("0")
 
 
 def test_weekly_total_of_exactly_2000_never_freezes(ctx):
     results = [daily("R1", d, net="500", shortfall="1000") for d in WEEK[:2]]
-    for policy in (WeeklyPolicy(), WeeklyPolicy(freeze_on_weekly_total=True)):
-        assert not calculate_weekly_payout(ctx, "R1", MON, daily_results=results, policy=policy).freeze_flag
+    assert not calculate_weekly_payout(ctx, "R1", MON, daily_results=results).freeze_flag
 
 
 def test_cod_shortfall_and_penalties_are_not_deducted_again(ctx):
