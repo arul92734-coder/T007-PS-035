@@ -232,18 +232,21 @@ def test_distance_pay_is_3_50_per_km():
     assert r.gross_earnings == D2("70.00")
 
 
-def test_odometer_below_planned_is_used():
+def test_odometer_below_planned_within_symmetric_tolerance_is_used():
     s = Scn()
-    s.odometer("1000.00", "1015.00")
+    s.odometer("1000.00", "1019.00")  # 5% below planned 20 km
     r = s.pay(plain_route(20))
-    assert r.selected_distance_km == D2("15.00") and not r.odometer_discrepancy_flag
-    assert r.regular_distance_pay == D2("52.50")
+    assert r.selected_distance_km == D2("19.00") and not r.odometer_discrepancy_flag
+    assert r.regular_distance_pay == D2("66.50")
 
 
 @pytest.mark.parametrize("end,used,flag,source", [
-    ("1022.00", "22.00", False, dp.DISTANCE_SOURCE_ODOMETER),   # exactly +10%: accepted, no flag
-    ("1022.01", "20.00", True, dp.DISTANCE_SOURCE_PLANNED),     # more than +10%: planned + flag
-    ("1021.99", "21.99", False, dp.DISTANCE_SOURCE_ODOMETER),
+    ("1022.00", "22.00", False, dp.DISTANCE_SOURCE_ODOMETER),   # exactly +10%: accepted
+    ("1022.01", "20.00", True, dp.DISTANCE_SOURCE_PLANNED),     # > +10%: planned + flag
+    ("1021.99", "21.99", False, dp.DISTANCE_SOURCE_ODOMETER),   # within upper tolerance
+    ("1018.00", "18.00", False, dp.DISTANCE_SOURCE_ODOMETER),   # exactly -10%: accepted
+    ("1017.99", "20.00", True, dp.DISTANCE_SOURCE_PLANNED),    # > -10%: planned + flag
+    ("1018.01", "18.01", False, dp.DISTANCE_SOURCE_ODOMETER),  # within lower tolerance
 ])
 def test_odometer_tolerance_boundary(end, used, flag, source):
     s = Scn()
@@ -253,6 +256,16 @@ def test_odometer_tolerance_boundary(end, used, flag, source):
     assert r.odometer_discrepancy_flag is flag
     assert r.distance_source == source
     assert (dp.WARNING_ODOMETER_DISCREPANCY in r.warning_codes) is flag
+
+
+def test_odometer_far_below_planned_is_rejected_and_flagged():
+    s = Scn()
+    s.odometer("1000.00", "1015.00")  # 25% below planned 20 km
+    r = s.pay(plain_route(20))
+    assert r.selected_distance_km == D2("20.00")
+    assert r.distance_source == dp.DISTANCE_SOURCE_PLANNED
+    assert r.odometer_discrepancy_flag
+    assert dp.WARNING_ODOMETER_DISCREPANCY in r.warning_codes
 
 
 def test_missing_odometer_uses_planned_and_reports():

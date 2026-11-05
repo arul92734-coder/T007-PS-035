@@ -54,11 +54,11 @@ BR-05  per-parcel pay (which event is payable)
 BR-06  distance pay
     planned_km  = ``RouteResult.total_km`` (all legs incl. the return leg).
     actual_km   = odometer end_km - start_km.
-    actual_km <= planned_km * 1.10 (exactly +10% included)  -> use actual_km.
-    actual_km >  planned_km * 1.10                           -> use planned_km
-                                                               and set odometer_flag.
-    Only the upper side is tested (README: "odometer_flag true when actual is
-    more than 10% above planned"); an actual below planned is used as is.
+    abs(actual_km - planned_km) <= planned_km * 0.10 (exactly +/-10%
+    included) -> use actual_km. Outside that symmetric tolerance, use
+    planned_km and set odometer_flag. The Week 1 design document leaves
+    symmetry open; this implementation uses the symmetric interpretation
+    as a documented working decision pending mentor confirmation.
     Overtime: see ``planned_overtime_km``. Regular km are paid 3.50/km, overtime
     km 3.50 * 1.5 = 5.25/km; each km is paid ONCE (regular_km = selected_km -
     overtime_km). If the odometer is used, the planned overtime SHARE
@@ -129,7 +129,7 @@ RIDER_FAULT = "RIDER_FAULT"
 
 DISTANCE_RATE_PER_KM = Decimal("3.50")           # BR-06
 OVERTIME_MULTIPLIER = Decimal("1.5")
-ODOMETER_TOLERANCE = Decimal("1.10")             # actual may be up to +10%
+ODOMETER_TOLERANCE = Decimal("0.10")             # symmetric absolute deviation fraction
 
 VOLUME_TIER_1_PARCELS, VOLUME_TIER_1_AMOUNT = 30, Decimal("100")   # BR-07
 VOLUME_TIER_2_PARCELS, VOLUME_TIER_2_AMOUNT = 45, Decimal("250")
@@ -628,12 +628,13 @@ def calculate_daily_payout(ctx: PayoutContext, rider_id: str, operating_date: da
         if actual_km is None:
             selected_km, source = planned_km, DISTANCE_SOURCE_PLANNED
             warn(WARNING_MISSING_ODOMETER, "no odometer reading; planned distance is used")
-        elif actual_km <= planned_km * ODOMETER_TOLERANCE:       # exactly +10% is accepted
+        elif abs(actual_km - planned_km) <= planned_km * ODOMETER_TOLERANCE:
+            # The 10% tolerance is symmetric; exact +/-10% boundaries are accepted.
             selected_km, source = actual_km, DISTANCE_SOURCE_ODOMETER
         else:
             selected_km, source, flag = planned_km, DISTANCE_SOURCE_PLANNED, True
             warn(WARNING_ODOMETER_DISCREPANCY,
-                 f"odometer {actual_km} km is more than 10% above planned {planned_km} km; planned distance is used")
+                 f"odometer {actual_km} km differs from planned {planned_km} km by more than 10%; planned distance is used")
     elif actual_km is None:
         warn(WARNING_MISSING_ODOMETER, "no odometer reading")
 
