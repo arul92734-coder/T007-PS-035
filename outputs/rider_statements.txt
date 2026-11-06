@@ -1,0 +1,185 @@
+WEEKLY STATEMENT  rider RDR-01 (VAN)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   10784.34   (before penalties and COD shortfall)
+Daily penalties:     2696.06   (deducted once, in the daily net)
+COD shortfall total: 2000.00   (deducted once, in the daily net; max single day 2000.00)
+Daily net total:     6088.28   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        0.00
+Weekly gross before deductions (TDS base): 11284.34
+TDS (APPLIED): 112.84
+Net before rounding: 6475.44   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         6475.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      6475.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-02 (VAN)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   10299.74   (before penalties and COD shortfall)
+Daily penalties:     2507.97   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     7791.77   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        0.00
+Weekly gross before deductions (TDS base): 10799.74
+TDS (APPLIED): 108.00
+Net before rounding: 8183.77   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         8184.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      8184.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-03 (EV_BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3202.69   (before penalties and COD shortfall)
+Daily penalties:     526.08   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     2676.61   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        180.00
+Weekly gross before deductions (TDS base): 3882.69
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 3356.61   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         3357.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      3357.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-04 (EV_BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3220.79   (before penalties and COD shortfall)
+Daily penalties:     542.44   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     2678.35   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        180.00
+Weekly gross before deductions (TDS base): 3900.79
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 3358.35   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         3358.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      3358.00
+WARNING NO_DELIVERY_DAY: 2026-10-17: attempts recorded but nothing delivered (e.g. FAILED only); counted as a working day under rule OUTCOME_EVENT - mentor confirmation pending (EC-08)
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-05 (EV_BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3476.05   (before penalties and COD shortfall)
+Daily penalties:     708.05   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     2768.00   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        180.00
+Weekly gross before deductions (TDS base): 4156.05
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 3448.00   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         3448.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      3448.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-06 (BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3266.23   (before penalties and COD shortfall)
+Daily penalties:     639.42   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     2626.81   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        0.00
+Weekly gross before deductions (TDS base): 3766.23
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 3126.81   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         3127.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      3127.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-07 (BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3334.80   (before penalties and COD shortfall)
+Daily penalties:     697.32   (deducted once, in the daily net)
+COD shortfall total: 0.00   (deducted once, in the daily net; max single day 0.00)
+Daily net total:     2637.48   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        0.00
+Weekly gross before deductions (TDS base): 3834.80
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 3137.48   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         3137.00
+Freeze: not frozen
+Amount held:         0.00
+Amount payable:      3137.00
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)
+
+WEEKLY STATEMENT  rider RDR-08 (BIKE)
+Week: 2026-10-12 (Mon) to 2026-10-17 (Sat)
+Working days: 6 - 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17
+Daily gross total:   3380.14   (before penalties and COD shortfall)
+Daily penalties:     708.54   (deducted once, in the daily net)
+COD shortfall total: 2600.00   (deducted once, in the daily net; max single day 2600.00)
+Daily net total:     71.60   (= gross - penalties - COD shortfall)
+Attendance bonus:    500.00
+EV allowance:        0.00
+Weekly gross before deductions (TDS base): 3880.14
+TDS (NOT_APPLICABLE): 0.00
+Net before rounding: 571.60   (= weekly gross - TDS - penalties - COD shortfall)
+Net rounded:         572.00
+Freeze: FROZEN (days: 2026-10-12)
+Amount held:         572.00
+Amount payable:      0.00
+WARNING WEEKLY_FREEZE: weekly payout frozen pending review (cumulative COD shortfall 2600.00 is above 2000; contributing dates: 2026-10-12)
+ASSUMPTION: a working day = rostered AND at least one DELIVERED/FAILED/RESCHEDULED event (a FAILED-only day counts; EC-08 pending mentor confirmation)
+ASSUMPTION: TDS base = weekly gross BEFORE deductions (daily gross total + attendance bonus + EV allowance), so daily penalties and COD shortfalls do not reduce it; 1% rounded half-up to paise; applied only when strictly above 5000.00 (project working decision, not mentor-confirmed; the design document lists the TDS base as open)
+ASSUMPTION: final net = weekly gross - TDS - daily penalties - COD shortfall, each deducted exactly once; rounded half-up to the nearest rupee as the last step
+ASSUMPTION: freeze = cumulative Monday-Saturday COD shortfall total > 2000 (strict; exactly 2000 does not freeze; project working decision, not mentor-confirmed)
+ASSUMPTION: a frozen week holds the entire net weekly payout
+ASSUMPTION: COD shortfall and penalties are not deducted again (they are already inside the daily net)

@@ -1,0 +1,9 @@
+rider_id,rider_name,vehicle_type,capacity_parcels,capacity_kg,home_hub,default_shift_start,default_shift_end
+RDR-01,Suresh Naik,VAN,120,300.0,HUB-01,08:00:00,17:00:00
+RDR-02,Anil Khan,VAN,120,300.0,HUB-01,08:00:00,17:00:00
+RDR-03,Abhishek Setty,EV_BIKE,40,25.0,HUB-01,08:30:00,17:30:00
+RDR-04,Basavaraj Iyer,EV_BIKE,40,25.0,HUB-01,09:00:00,18:00:00
+RDR-05,Pradeep Verma,EV_BIKE,40,25.0,HUB-01,09:00:00,18:00:00
+RDR-06,Karthik Prabhu,BIKE,40,25.0,HUB-01,09:00:00,18:00:00
+RDR-07,Prakash Sharma,BIKE,40,25.0,HUB-01,08:30:00,17:30:00
+RDR-08,Suresh Hegde,BIKE,40,25.0,HUB-01,08:30:00,17:30:00
