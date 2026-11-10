@@ -193,17 +193,25 @@ DISTANCE_SOURCE_NONE = "NONE"
 # --------------------------------------------------------------------------
 
 
+
 @dataclass(frozen=True)
 class PayoutPolicy:
-    """The three choices the documents leave open (defaults are documented above)."""
-
     late_deposit_treatment: str = LATE_COUNT_AND_FLAG
     reschedule_counts_as_first_attempt_miss: bool = True
     pay_upgraded_priority_as_express: bool = False
 
     def __post_init__(self) -> None:
         if self.late_deposit_treatment not in (LATE_COUNT_AND_FLAG, LATE_EXCLUDE):
-            raise ValueError(f"late_deposit_treatment must be {LATE_COUNT_AND_FLAG!r} or {LATE_EXCLUDE!r}")
+            raise ValueError(
+                f"late_deposit_treatment must be "
+                f"{LATE_COUNT_AND_FLAG!r} or {LATE_EXCLUDE!r}"
+            )
+
+        if not isinstance(self.reschedule_counts_as_first_attempt_miss, bool):
+            raise TypeError("reschedule_counts_as_first_attempt_miss must be a bool")
+
+        if not isinstance(self.pay_upgraded_priority_as_express, bool):
+            raise TypeError("pay_upgraded_priority_as_express must be a bool")
 
 
 DEFAULT_POLICY = PayoutPolicy()

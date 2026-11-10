@@ -625,7 +625,20 @@ def test_late_deposit_exclude_policy_leaves_amount_in_shortfall():
     with pytest.raises(ValueError):
         PayoutPolicy(late_deposit_treatment="IGNORE")
 
-
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("reschedule_counts_as_first_attempt_miss", "false"),
+        ("reschedule_counts_as_first_attempt_miss", 1),
+        ("reschedule_counts_as_first_attempt_miss", None),
+        ("pay_upgraded_priority_as_express", "false"),
+        ("pay_upgraded_priority_as_express", 1),
+        ("pay_upgraded_priority_as_express", None),
+    ],
+)
+def test_payout_policy_rejects_non_boolean_flags(field, value):
+    with pytest.raises(TypeError):
+        PayoutPolicy(**{field: value})
 @pytest.mark.parametrize("deposit,shortfall,freeze", [
     ("3000.00", "2000.00", False),     # exactly 2,000: deducted, no freeze
     ("2999.99", "2000.01", True),      # above 2,000: freeze
