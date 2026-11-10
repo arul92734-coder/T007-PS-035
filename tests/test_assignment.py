@@ -160,7 +160,33 @@ def test_a_smaller_capacity_on_the_rider_record_is_respected():
     r2 = run([rider(kg="1.5")], [parcel("A", east=1, kg="1.0"), parcel("B", east=2, kg="1.0", we="13:00:00")])
     assert r2.unassigned_parcel_ids == ("B",)
 
+def test_vehicle_limits_override_larger_rider_record_capacities():
+    # BIKE limits are 40 parcels and 25 kg.
+    # A larger rider-record capacity must not override vehicle limits.
 
+    ps = [
+        parcel(f"P{i}", east=1, we="20:00:00", kg="0.5")
+        for i in range(1, 42)
+    ]
+
+    wide_rider = rider(parcels=50, kg="30")
+    r = run([wide_rider], ps)
+
+    assert r.for_rider("RDR-01").parcel_count == 40
+    assert r.for_rider("RDR-01").total_weight_kg == Decimal("20.0")
+    assert len(r.unassigned) == 1
+    assert r.unassigned[0].reason_code == NO_RIDER_CAPACITY
+
+    # A rider record allowing 30 kg must still respect the 25 kg vehicle limit.
+    ps2 = [
+        parcel("A", east=1, we="12:00:00", kg="25.0"),
+        parcel("B", east=1, we="13:00:00", kg="0.1"),
+    ]
+
+    r2 = run([rider(parcels=50, kg="30")], ps2)
+
+    assert r2.for_rider("RDR-01").total_weight_kg == Decimal("25.0")
+    assert r2.unassigned[0].parcel_id == "B"
 # ---- BR-01 capacity: VAN ---------------------------------------------------------------------------
 
 def test_van_accepts_exactly_120_parcels_within_300_kg():
