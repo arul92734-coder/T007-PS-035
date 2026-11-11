@@ -433,6 +433,15 @@ def test_duplicate_parcel_ids_rejected():
         route([parcel("P1", 1), parcel("P1", 2)])
 
 
+@pytest.mark.parametrize("bad_id", ["", 123, None])
+def test_parcel_id_must_be_a_non_empty_string(bad_id):
+    p = parcel("P1")
+    bad = Parcel(**{**p.__dict__, "parcel_id": bad_id})
+
+    with pytest.raises(ValueError, match="parcel_id"):
+        route([bad])
+
+
 def test_parcel_id_clashing_with_hub_id_rejected():
     with pytest.raises(ValueError, match="hub"):
         route([parcel("HUB", 1)])
