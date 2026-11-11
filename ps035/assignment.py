@@ -1,3 +1,4 @@
+
 """Rider-to-parcel assignment for one day's pool (BR-01, BR-02).
 
 Beginner notes
@@ -98,7 +99,7 @@ class RiderAssignment:
     hub_id: str
     shift_start: time
     shift_end: time
-    parcel_ids: tuple[str, ...]      # in route (stop) order
+    parcel_ids: tuple[str, ...]
     route: RouteResult
     parcel_count: int
     total_weight_kg: Decimal
@@ -125,9 +126,9 @@ class UnassignedParcel:
 class AssignmentResult:
     """Outcome for the whole fleet (every list is sorted deterministically)."""
 
-    assignments: tuple[RiderAssignment, ...]        # rostered riders, by rider_id
-    unassigned: tuple[UnassignedParcel, ...]        # in processing order
-    off_roster_rider_ids: tuple[str, ...]           # riders with no shift that day
+    assignments: tuple[RiderAssignment, ...]
+    unassigned: tuple[UnassignedParcel, ...]
+    off_roster_rider_ids: tuple[str, ...]
 
     @property
     def assigned_parcel_ids(self) -> tuple[str, ...]:
@@ -162,13 +163,16 @@ def vehicle_capacity(vehicle_type: str) -> tuple[int, Decimal]:
         return VEHICLE_LIMITS[vehicle_type]
     except (KeyError, TypeError):
         raise ValueError(
-            f"unknown vehicle_type {vehicle_type!r}; expected one of {', '.join(VEHICLE_LIMITS)}") from None
+            f"unknown vehicle_type {vehicle_type!r}; expected one of {', '.join(VEHICLE_LIMITS)}"
+        ) from None
 
 
 def _to_decimal(value: object, label: str) -> Decimal:
     """Convert a weight/limit to a finite, non-negative Decimal (never rounded)."""
     if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
-        raise TypeError(f"{label} must be a number, got {type(value).__name__}: {value!r}")
+        raise TypeError(
+            f"{label} must be a number, got {type(value).__name__}: {value!r}"
+        )
     d = Decimal(repr(value)) if isinstance(value, float) else Decimal(value)
     if not d.is_finite():
         raise ValueError(f"{label} must be a finite number, got {value!r}")
@@ -183,31 +187,52 @@ def _list_of(records: Iterable, cls: type, name: str) -> list:
     items = list(records)
     for r in items:
         if not isinstance(r, cls):
-            raise TypeError(f"each item of {name} must be a loader {cls.__name__} record, got {type(r).__name__}")
+            raise TypeError(
+                f"each item of {name} must be a loader {cls.__name__} record, "
+                f"got {type(r).__name__}"
+            )
     return items
 
 
-def _validate_parcels(parcels: Iterable[Parcel]) -> list[tuple[Parcel, Decimal]]:
+def _validate_parcels(
+    parcels: Iterable[Parcel],
+) -> list[tuple[Parcel, Decimal]]:
     items = _list_of(parcels, Parcel, "parcels")
     seen: set[str] = set()
     out = []
+
     for p in items:
         if p.parcel_id in seen:
             raise ValueError(f"duplicate parcel_id {p.parcel_id!r}")
         seen.add(p.parcel_id)
+
         if p.priority not in ("EXPRESS", "STANDARD"):
-            raise ValueError(f"{p.parcel_id}: priority must be EXPRESS or STANDARD, got {p.priority!r}")
+            raise ValueError(
+                f"{p.parcel_id}: priority must be EXPRESS or STANDARD, "
+                f"got {p.priority!r}"
+            )
+
         if not isinstance(p.cod_flag, bool):
-            raise TypeError(f"{p.parcel_id}: cod_flag must be a bool, got {type(p.cod_flag).__name__}")
+            raise TypeError(
+                f"{p.parcel_id}: cod_flag must be a bool, "
+                f"got {type(p.cod_flag).__name__}"
+            )
+
         weight = _to_decimal(p.weight_kg, f"{p.parcel_id}: weight_kg")
+
         try:
-            haversine_km(p.dest_lat, p.dest_lon, p.dest_lat, p.dest_lon)  # validates coordinates
+            haversine_km(p.dest_lat, p.dest_lon, p.dest_lat, p.dest_lon)
             start, end = time_of_day(p.window_start), time_of_day(p.window_end)
         except (TypeError, ValueError) as exc:
             raise type(exc)(f"{p.parcel_id}: {exc}") from None
+
         if end < start:
-            raise ValueError(f"{p.parcel_id}: window_end is before window_start")
+            raise ValueError(
+                f"{p.parcel_id}: window_end is before window_start"
+            )
+
         out.append((p, weight))
+
     return out
 
 
@@ -227,46 +252,91 @@ class _RiderState:
 
 
 def _route_for(state: _RiderState, parcels: list[Parcel]) -> RouteResult:
-    return sequence_route(state.hub.lat, state.hub.lon, state.shift_start, state.shift_end,
-                          parcels, hub_id=state.hub.hub_id)
+    return sequence_route(
+        state.hub.lat,
+        state.hub.lon,
+        state.shift_start,
+        state.shift_end,
+        parcels,
+        hub_id=state.hub.hub_id,
+    )
 
 
-def _build_riders(riders: list[Rider], hubs: list[Hub], shifts: list[RiderShift] | None,
-                  plan_date: date | None) -> tuple[list[_RiderState], list[str]]:
+def _build_riders(
+    riders: list[Rider],
+    hubs: list[Hub],
+    shifts: list[RiderShift] | None,
+    plan_date: date | None,
+) -> tuple[list[_RiderState], list[str]]:
     hub_by_id: dict[str, Hub] = {}
+
     for h in hubs:
         if h.hub_id in hub_by_id:
             raise ValueError(f"duplicate hub_id {h.hub_id!r}")
         hub_by_id[h.hub_id] = h
 
     shift_by_key: dict[tuple[str, date], RiderShift] = {}
+
     if shifts is not None:
         if plan_date is None:
             raise ValueError("plan_date is required when shifts are supplied")
+
         if not isinstance(plan_date, date):
             raise TypeError("plan_date must be a datetime.date")
+
+        # Validate that every shift belongs to a registered rider.
+        known_rider_ids = {r.rider_id for r in riders}
+
         for s in shifts:
+            if s.rider_id not in known_rider_ids:
+                raise ValueError(
+                    f"shift references unknown rider {s.rider_id!r}"
+                )
+
             key = (s.rider_id, s.shift_date)
+
             if key in shift_by_key:
-                raise ValueError(f"duplicate shift for {s.rider_id} on {s.shift_date}")
+                raise ValueError(
+                    f"duplicate shift for {s.rider_id} on {s.shift_date}"
+                )
+
             shift_by_key[key] = s
+
     elif plan_date is not None:
-        raise ValueError("plan_date is only meaningful together with shifts")
+        raise ValueError(
+            "plan_date is only meaningful together with shifts"
+        )
 
     seen: set[str] = set()
     states: list[_RiderState] = []
     off_roster: list[str] = []
+
     for r in sorted(riders, key=lambda x: x.rider_id):
         if r.rider_id in seen:
             raise ValueError(f"duplicate rider_id {r.rider_id!r}")
         seen.add(r.rider_id)
+
         max_parcels, max_kg = vehicle_capacity(r.vehicle_type)
-        if isinstance(r.capacity_parcels, bool) or not isinstance(r.capacity_parcels, int) or r.capacity_parcels <= 0:
-            raise ValueError(f"{r.rider_id}: capacity_parcels must be a positive whole number, got {r.capacity_parcels!r}")
+
+        if (
+            isinstance(r.capacity_parcels, bool)
+            or not isinstance(r.capacity_parcels, int)
+            or r.capacity_parcels <= 0
+        ):
+            raise ValueError(
+                f"{r.rider_id}: capacity_parcels must be a positive "
+                f"whole number, got {r.capacity_parcels!r}"
+            )
+
         rec_kg = _to_decimal(r.capacity_kg, f"{r.rider_id}: capacity_kg")
+
         hub = hub_by_id.get(r.home_hub)
         if hub is None:
-            raise ValueError(f"{r.rider_id}: home_hub {r.home_hub!r} not found in the supplied hubs")
+            raise ValueError(
+                f"{r.rider_id}: home_hub {r.home_hub!r} "
+                "not found in the supplied hubs"
+            )
+
         if shifts is None:
             start, end = r.default_shift_start, r.default_shift_end
         else:
@@ -275,14 +345,27 @@ def _build_riders(riders: list[Rider], hubs: list[Hub], shifts: list[RiderShift]
                 off_roster.append(r.rider_id)
                 continue
             start, end = s.shift_start, s.shift_end
+
         if time_of_day(end) < time_of_day(start):
-            raise ValueError(f"{r.rider_id}: shift_end is before shift_start")
+            raise ValueError(
+                f"{r.rider_id}: shift_end is before shift_start"
+            )
+
         state = _RiderState(
-            rider=r, hub=hub, shift_start=start, shift_end=end,
-            cap_parcels=min(max_parcels, r.capacity_parcels), cap_kg=min(max_kg, rec_kg),
-            parcels=[], weight=Decimal(0), route=None)  # type: ignore[arg-type]
+            rider=r,
+            hub=hub,
+            shift_start=start,
+            shift_end=end,
+            cap_parcels=min(max_parcels, r.capacity_parcels),
+            cap_kg=min(max_kg, rec_kg),
+            parcels=[],
+            weight=Decimal(0),
+            route=None,  # type: ignore[arg-type]
+        )
+
         state.route = _route_for(state, [])
         states.append(state)
+
     return states, off_roster
 
 
@@ -291,9 +374,13 @@ def _build_riders(riders: list[Rider], hubs: list[Hub], shifts: list[RiderShift]
 # --------------------------------------------------------------------------
 
 
-def assign_parcels(riders: Iterable[Rider], hubs: Iterable[Hub], parcels: Iterable[Parcel],
-                   shifts: Iterable[RiderShift] | None = None,
-                   plan_date: date | None = None) -> AssignmentResult:
+def assign_parcels(
+    riders: Iterable[Rider],
+    hubs: Iterable[Hub],
+    parcels: Iterable[Parcel],
+    shifts: Iterable[RiderShift] | None = None,
+    plan_date: date | None = None,
+) -> AssignmentResult:
     """Assign parcels to riders by greedy lowest-added-distance (see module doc).
 
     riders / hubs / parcels: loader ``Rider``, ``Hub`` and ``Parcel`` records.
@@ -305,38 +392,74 @@ def assign_parcels(riders: Iterable[Rider], hubs: Iterable[Hub], parcels: Iterab
     hub_list = _list_of(hubs, Hub, "hubs")
     shift_list = None if shifts is None else _list_of(shifts, RiderShift, "shifts")
     items = _validate_parcels(parcels)
-    states, off_roster = _build_riders(rider_list, hub_list, shift_list, plan_date)
+
+    states, off_roster = _build_riders(
+        rider_list, hub_list, shift_list, plan_date
+    )
 
     # EXPRESS first; inside a tier earlier window_end, then parcel_id.
-    todo = sorted(items, key=lambda it: (it[0].priority != "EXPRESS", time_of_day(it[0].window_end),
-                                         it[0].parcel_id))
+    todo = sorted(
+        items,
+        key=lambda it: (
+            it[0].priority != "EXPRESS",
+            time_of_day(it[0].window_end),
+            it[0].parcel_id,
+        ),
+    )
+
     unassigned: list[UnassignedParcel] = []
 
     for parcel, weight in todo:
         pid = parcel.parcel_id
         best: tuple[Decimal, str, _RiderState, RouteResult] | None = None
-        outcomes: list[tuple[str, str, str]] = []  # (rider_id, code, text)
-        for st in states:  # already sorted by rider_id
+        outcomes: list[tuple[str, str, str]] = []
+
+        for st in states:
             rid = st.rider.rider_id
+
             if len(st.parcels) + 1 > st.cap_parcels:
-                outcomes.append((rid, _CAPACITY_OUTCOME, f"parcel limit {st.cap_parcels} reached"))
+                outcomes.append(
+                    (rid, _CAPACITY_OUTCOME,
+                     f"parcel limit {st.cap_parcels} reached")
+                )
                 continue
+
             if st.weight + weight > st.cap_kg:
-                outcomes.append((rid, _CAPACITY_OUTCOME,
-                                 f"{st.weight} kg + {weight} kg exceeds {st.cap_kg} kg"))
+                outcomes.append(
+                    (rid, _CAPACITY_OUTCOME,
+                     f"{st.weight} kg + {weight} kg exceeds {st.cap_kg} kg")
+                )
                 continue
+
             trial = _route_for(st, st.parcels + [parcel])
+
             if not trial.unsequenced:
-                added = Decimal(repr(trial.total_km)) - Decimal(repr(st.route.total_km))
+                added = (
+                    Decimal(repr(trial.total_km))
+                    - Decimal(repr(st.route.total_km))
+                )
+
                 if best is None or (added, rid) < (best[0], best[1]):
                     best = (added, rid, st, trial)
+
                 continue
-            own = next((u for u in trial.unsequenced if u.parcel_id == pid), None)
+
+            own = next(
+                (u for u in trial.unsequenced if u.parcel_id == pid),
+                None,
+            )
+
             if own is not None:
                 outcomes.append((rid, own.reason_code, own.detail))
             else:
-                displaced = ", ".join(u.parcel_id for u in trial.unsequenced)
-                outcomes.append((rid, NO_FEASIBLE_ROUTE, f"would displace already-assigned {displaced}"))
+                displaced = ", ".join(
+                    u.parcel_id for u in trial.unsequenced
+                )
+                outcomes.append(
+                    (rid, NO_FEASIBLE_ROUTE,
+                     f"would displace already-assigned {displaced}")
+                )
+
         if best is not None:
             _, _, st, trial = best
             st.parcels.append(parcel)
@@ -345,22 +468,53 @@ def assign_parcels(riders: Iterable[Rider], hubs: Iterable[Hub], parcels: Iterab
         else:
             unassigned.append(_explain(pid, outcomes))
 
-    assignments = tuple(RiderAssignment(
-        rider_id=st.rider.rider_id, hub_id=st.hub.hub_id, shift_start=st.shift_start, shift_end=st.shift_end,
-        parcel_ids=st.route.parcel_ids, route=st.route, parcel_count=len(st.parcels),
-        total_weight_kg=st.weight, capacity_parcels=st.cap_parcels, capacity_kg=st.cap_kg) for st in states)
-    return AssignmentResult(assignments=assignments, unassigned=tuple(unassigned),
-                            off_roster_rider_ids=tuple(off_roster))
+    assignments = tuple(
+        RiderAssignment(
+            rider_id=st.rider.rider_id,
+            hub_id=st.hub.hub_id,
+            shift_start=st.shift_start,
+            shift_end=st.shift_end,
+            parcel_ids=st.route.parcel_ids,
+            route=st.route,
+            parcel_count=len(st.parcels),
+            total_weight_kg=st.weight,
+            capacity_parcels=st.cap_parcels,
+            capacity_kg=st.cap_kg,
+        )
+        for st in states
+    )
+
+    return AssignmentResult(
+        assignments=assignments,
+        unassigned=tuple(unassigned),
+        off_roster_rider_ids=tuple(off_roster),
+    )
 
 
-def _explain(parcel_id: str, outcomes: list[tuple[str, str, str]]) -> UnassignedParcel:
+def _explain(
+    parcel_id: str,
+    outcomes: list[tuple[str, str, str]],
+) -> UnassignedParcel:
     """Turn the per-rider refusals into one reason code plus a readable detail."""
     if not outcomes:
-        return UnassignedParcel(parcel_id, NO_RIDER_AVAILABLE, "no rostered rider is available")
-    detail = "; ".join(f"{rid}: {code} ({text})" for rid, code, text in outcomes)
-    route_codes = {code for _, code, _ in outcomes if code != _CAPACITY_OUTCOME}
+        return UnassignedParcel(
+            parcel_id,
+            NO_RIDER_AVAILABLE,
+            "no rostered rider is available",
+        )
+
+    detail = "; ".join(
+        f"{rid}: {code} ({text})" for rid, code, text in outcomes
+    )
+
+    route_codes = {
+        code for _, code, _ in outcomes if code != _CAPACITY_OUTCOME
+    }
+
     if not route_codes:
         return UnassignedParcel(parcel_id, NO_RIDER_CAPACITY, detail)
+
     if len(route_codes) == 1:
         return UnassignedParcel(parcel_id, route_codes.pop(), detail)
+
     return UnassignedParcel(parcel_id, NO_FEASIBLE_ROUTE, detail)

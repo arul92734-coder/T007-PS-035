@@ -533,7 +533,23 @@ def test_shift_before_start_and_roster_argument_errors():
     with pytest.raises(ValueError, match="duplicate shift"):
         run([rider()], [], shifts=[RiderShift("RDR-01", DAY, hhmm("08:00:00"), hhmm("17:00:00"))] * 2, plan_date=DAY)
 
+def test_shift_for_unknown_rider_is_rejected():
+    shifts = [
+        RiderShift(
+            "RDR-99",
+            DAY,
+            hhmm("08:00:00"),
+            hhmm("18:00:00"),
+        )
+    ]
 
+    with pytest.raises(ValueError, match="unknown rider"):
+        run(
+            [rider("RDR-01")],
+            [],
+            shifts=shifts,
+            plan_date=DAY,
+        )
 def test_wrong_input_types_rejected():
     with pytest.raises(TypeError):
         run([{"rider_id": "RDR-01"}], [])
