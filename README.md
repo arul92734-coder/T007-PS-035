@@ -89,10 +89,14 @@ The project generates the following files inside the outputs folder:
 - weekly_payouts.csv
 - rider_statements.txt
 
+
 ## Testing
 
-The current automated test suite contains 683 passing tests.## Demo Video
+The current automated test suite contains 683 passing tests.
+
+## Demo Video
 
 **Final Project Demonstration – Team T007, PS-035**
 
 [Watch the Project Demo](https://drive.google.com/file/d/1vlpYhc1dJuOUDXGlWNUu4CKOK1trNhdW/view?usp=sharing)
+
